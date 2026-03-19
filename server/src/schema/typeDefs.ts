@@ -15,6 +15,7 @@ const typeDefs = `
         track(id: ID!): Track
         tracksByGenre(genre: String!): [Track!]!
         tracksByBpmRange(min: Float!, max: Float!): [Track!]!
+        compatibleTracks(trackId: ID!): [Track!]!
     }
 
     input TrackInput {                                                                  

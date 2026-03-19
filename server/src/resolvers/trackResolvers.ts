@@ -6,6 +6,22 @@ const getConnection = () => mysql.createConnection({
     database: 'dj_set_tracker',
 });
 
+function getCompatibleKeys(camelotKey: string): string[]{
+    const number = parseInt(camelotKey);
+    const letter = camelotKey.slice(-1);
+
+    const prev = number === 1 ? 12 : number - 1;
+    const next = number === 12 ? 1 : number + 1;
+    const otherLetter = letter === 'A' ? 'B' : 'A';
+
+    return [
+        `${prev}${letter}`,
+        `${number}${letter}`,
+        `${next}${letter}`,
+        `${number}${otherLetter}`
+    ];
+}
+
 const trackResolvers = {
     Query: {
         tracks: async () => {
@@ -40,7 +56,30 @@ const trackResolvers = {
             );
             await connection.end();
             return rows;
-        }
+        },
+        compatibleTracks: async (_: any, args: { trackId: string }) => {
+            const connection = await getConnection();
+
+            const [sourceRows] = await connection.execute(
+                'SELECT * FROM tracks WHERE id = ?',
+                [args.trackId]
+            );
+            const sourceTrack = (sourceRows as any[])[0];
+            if (!sourceTrack) return [];
+
+            const compatibleKeys = getCompatibleKeys(sourceTrack.musical_key);
+
+            const placeholders = compatibleKeys.map(() => '?').join(', ');
+            const [rows] = await connection.execute(
+                `SELECT * FROM tracks
+                 WHERE musical_key IN (${placeholders})
+                 AND bpm BETWEEN ? AND ?
+                 AND id != ?`,
+                 [...compatibleKeys, sourceTrack.bpm - 6, sourceTrack.bpm + 6, args.trackId]
+            );
+            await connection.end();
+            return rows;
+        },
     },
     Mutation: {
         addTrack: async (_: any, args: { input: any }) => {
@@ -56,6 +95,10 @@ const trackResolvers = {
             await connection.end();
             return (rows as any[])[0];
         },
+    },
+    Track: {        
+      musicalKey: (parent: any) => parent.musical_key,
+      energyLevel: (parent: any) => parent.energy_level,                              
     },
 };
 
